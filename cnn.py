@@ -51,10 +51,15 @@ model = Sequential(
         Input(shape=img_shape),
         Conv2D(32, kernel_size=(3, 3), activation="relu"),
         MaxPooling2D(),
-        Dropout(0.5),
         Conv2D(64, kernel_size=(3, 3), activation="relu"),
         MaxPooling2D(),
+        Conv2D(128, kernel_size=(3, 3), activation="relu"),
+        MaxPooling2D(),
         Flatten(),
+        Dense(1024, activation='relu'),
+        Dropout(0.5),
+        Dense(1024, activation='relu'),
+        Dropout(0.5),
         Dense(classes, activation="softmax"),
     ]
 )
@@ -62,7 +67,7 @@ model = Sequential(
 model.summary()
 
 callbacks = [
-    EarlyStopping(monitor='accuracy', patience=5, mode='max'),
+    EarlyStopping(monitor='acc', patience=5, mode='max'),
     ModelCheckpoint(filepath='model.{epoch:02d}-{val_acc:.2f}.h5', period=10),
 ]
 

@@ -1,6 +1,6 @@
 import numpy as np
 
-with np.load("data.npz") as data:
-    X_train = data['X_train']
+with np.load("extraSplitData.npz") as data:
+    Y_train = data['Y_train']
 
-print(X_train.shape)
+print(Y_train)

@@ -13,20 +13,22 @@ ray.init()
 
 class loaddata():
     def __init__(self):
-        self.N_FFT = 1024         
-        self.HOP_SIZE = 1024       
-        self.N_MELS = 128
-        self.WIN_SIZE = 1024      
-        self.WINDOW_TYPE = 'hann' 
-        self.FEATURE = 'mel'      
-        self.FMIN = 1400
+        self.N_FFT = 1024
+        self.HOP_SIZE = 216
+        self.N_MELS = 256
+        self.WIN_SIZE = 1024
+        self.WINDOW_TYPE = 'hann'
+        self.FEATURE = 'mel'
+        self.FMIN = 1000
 
-        with open('unbiasedIds.pkl', 'rb') as handle:
+        with open('ids.pkl', 'rb') as handle:
             self.labels = pickle.load(handle)
-            #print(type(self.labels))
-        with open("labels.csv", 'r') as handle:
+            #print(self.labels)
+        with open("myLabels.csv", 'r') as handle:
             reader = csv.reader(handle)
-            self.labelIDs = {rows[1]:rows[2] for rows in reader}
+            self.labelIDs = {rows[0]:rows[1] for rows in reader}
+            #print(self.labelIDs)
+
     
     def getSpecies(self, file):
         #id = file[2:(len(file)-5)]
@@ -35,35 +37,54 @@ class loaddata():
         return label
 
     def spectogram(self, file):
-        data, sr = librosa.load("/media/hdd/birdsong/" + file, sr=11025)
-        length = librosa.get_duration(y = data, sr = sr)
-        if length < 5:
-            print(file)
-        data, sr = librosa.load("/media/hdd/birdsong/" + file, sr=11025, duration=5 * floor(length/5))
-        length = librosa.get_duration(y = data, sr = sr)
-
-        numSplits = floor(length/5)
-
-        splits = np.split(data, numSplits)
+        data, sr = librosa.load("/media/hdd/birdsong/" + file, duration=5, sr=11025)
 
         newData = []
-        for split in splits:
-            S = librosa.feature.melspectrogram(y=split,sr=sr,
-                                        n_fft=self.N_FFT,
-                                        hop_length=self.HOP_SIZE, 
-                                        n_mels=self.N_MELS, 
-                                        htk=True, 
-                                        fmin=self.FMIN, 
-                                        fmax=sr/2)
-            S = S.reshape(128,54)
-            newData.append(S)
+        S = librosa.feature.melspectrogram(y=data,sr=sr)
+
+        OLDmelspectrogram = np.mean(S, axis=0)
+        melspectrogram = []
+        for val in OLDmelspectrogram:
+            melspectrogram.append([val])
+
+        OLDS_db = np.mean(librosa.amplitude_to_db(np.abs(S), ref=np.max), axis=0)
+        S_db = []
+        for val in OLDS_db:
+            S_db.append([val])
+        #short term fourier transform
+        stft = np.abs(librosa.stft(data))
+
+        #mfcc
+        OLDmfcc = np.mean(librosa.feature.mfcc(y=data, sr=sr, n_mfcc=40), axis=0)
+        mfcc = []
+        for val in OLDmfcc:
+            mfcc.append([val])
+        #chroma
+        OLDchroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sr), axis=0)
+        chroma = []
+        for val in OLDchroma:
+            chroma.append([val])
+        #spectral contrast
+        #contrast = np.mean(librosa.feature.spectral_contrast(y=data, sr=sr), axis=0)
+
+        #tonetz
+        OLDtonetz = np.mean(librosa.feature.tonnetz(y=librosa.effects.harmonic(data), sr=sr), axis=0)
+        tonetz = []
+        for val in OLDtonetz:
+            tonetz.append(val)
+
 
         #print(len(newData))
-        return newData
+        return melspectrogram, S_db, mfcc, chroma, tonetz
+
 
     def createData(self, dir):
-        X_train = []
         Y_train = []
+        mel = []
+        db = []
+        mfcc = []
+        chroma = []
+        tone = []
         englishName = []
         files = list(self.labels)
         print(len(files))
@@ -74,33 +95,54 @@ class loaddata():
         print(len(out))
         #print(len(X_train), len(Y_train))
         for x in out:
-            for xt in x[0]:
-                X_train.append(xt)
-            for yt in x[1]:
+            for m in x[0]:
+                mel.append(m)
+            for d in x[1]:
+                db.append(m)
+            for m in x[2]:
+                mfcc.append(m)
+            for c in x[3]:
+                chroma.append(m)
+            for t in x[4]:
+                tone.append(m)
+            for yt in x[5]:
                 Y_train.append(yt)
-            for en in x[2]:
+                print(yt)
+            for en in x[6]:
                 englishName.append(en)
-        X_train = np.array(X_train)
+        mel = np.array(mel)
+        db = np.array(db)
+        mfcc = np.array(mfcc)
+        chroma = np.array(chroma)
+        tone = np.array(tone)
         Y_train = np.array(Y_train)
         englishName = np.array(englishName)
-        print(X_train.shape, Y_train.shape, englishName.shape)
-        np.savez_compressed(dir, X_train=X_train, Y_train=Y_train, englishName = englishName)
+        print(mel.shape, db.shape, mfcc.shape, chroma.shape, tone.shape, Y_train.shape, englishName.shape)
+        np.savez_compressed(dir, mel=mel, db=db, mfcc=mfcc, chroma=chroma, tone=tone, Y_train=Y_train, englishName = englishName)
 
 @ray.remote
 def createDataSplit(files, labelIDs):
-    X_train = []
     Y_train = []
+    mel = []
+    db = []
+    mfcc = []
+    chroma = []
+    tone = []
     realFiles = listdir("/media/hdd/birdsong")
     englishName = []
     ld = loaddata()
     for f in files:
         if f in realFiles:
-            for split in ld.spectogram(f):
-                X_train.append(split)
-                Y_train.append(int(labelIDs[ld.getSpecies(f)]))
-                englishName.append(ld.getSpecies(f))
+            temp = ld.spectogram(f)
+            mel.append(temp[0])
+            db.append(temp[1])
+            mfcc.append(temp[2])
+            chroma.append(temp[3])
+            tone.append(temp[4])
+            Y_train.append(int(labelIDs[ld.getSpecies(f)]))
+            englishName.append(ld.getSpecies(f))
     
-    return X_train, Y_train, englishName
+    return mel, db, mfcc, chroma, tone, Y_train, englishName
 
 ld = loaddata()
-ld.createData("largeData")
+ld.createData("extraSplitDataLSTM")
