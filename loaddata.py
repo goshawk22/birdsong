@@ -21,15 +21,13 @@ class loaddata():
         self.FEATURE = 'mel'
         self.FMIN = 1000
 
-        with open('ids.pkl', 'rb') as handle:
-            self.labels = pickle.load(handle)
-            #print(self.labels)
-        with open("myLabels.csv", 'r') as handle:
+        with open('renamedIds.json', 'r') as handle:
+            self.labels = json.load(handle)
+        with open("labels.csv", 'r') as handle:
             reader = csv.reader(handle)
-            self.labelIDs = {rows[0]:rows[1] for rows in reader}
+            self.labelIDs = {rows[1]:rows[2] for rows in reader}
             #print(self.labelIDs)
-
-    
+        
     def getSpecies(self, file):
         #id = file[2:(len(file)-5)]
         #print(id)
@@ -42,36 +40,25 @@ class loaddata():
         newData = []
         S = librosa.feature.melspectrogram(y=data,sr=sr)
 
-        OLDmelspectrogram = np.mean(S, axis=0)
-        melspectrogram = []
-        for val in OLDmelspectrogram:
-            melspectrogram.append([val])
+        melspectrogram = np.mean(S, axis=0)
 
-        OLDS_db = np.mean(librosa.amplitude_to_db(np.abs(S), ref=np.max), axis=0)
-        S_db = []
-        for val in OLDS_db:
-            S_db.append([val])
+        S_db = np.mean(librosa.amplitude_to_db(np.abs(S), ref=np.max), axis=0)
+
         #short term fourier transform
         stft = np.abs(librosa.stft(data))
 
         #mfcc
-        OLDmfcc = np.mean(librosa.feature.mfcc(y=data, sr=sr, n_mfcc=40), axis=0)
-        mfcc = []
-        for val in OLDmfcc:
-            mfcc.append([val])
+        mfcc = np.mean(librosa.feature.mfcc(y=data, sr=sr, n_mfcc=40), axis=0)
+
         #chroma
-        OLDchroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sr), axis=0)
-        chroma = []
-        for val in OLDchroma:
-            chroma.append([val])
+        chroma = np.mean(librosa.feature.chroma_stft(S=stft, sr=sr), axis=0)
+
         #spectral contrast
         #contrast = np.mean(librosa.feature.spectral_contrast(y=data, sr=sr), axis=0)
 
         #tonetz
-        OLDtonetz = np.mean(librosa.feature.tonnetz(y=librosa.effects.harmonic(data), sr=sr), axis=0)
-        tonetz = []
-        for val in OLDtonetz:
-            tonetz.append(val)
+        tonetz = np.mean(librosa.feature.tonnetz(y=librosa.effects.harmonic(data), sr=sr), axis=0)
+
 
 
         #print(len(newData))
@@ -133,16 +120,19 @@ def createDataSplit(files, labelIDs):
     ld = loaddata()
     for f in files:
         if f in realFiles:
-            temp = ld.spectogram(f)
-            mel.append(temp[0])
-            db.append(temp[1])
-            mfcc.append(temp[2])
-            chroma.append(temp[3])
-            tone.append(temp[4])
-            Y_train.append(int(labelIDs[ld.getSpecies(f)]))
-            englishName.append(ld.getSpecies(f))
+            spe = ld.getSpecies(f)
+            if spe in labelIDs:
+            #if spe in self.valids:
+                temp = ld.spectogram(f)
+                mel.append(temp[0])
+                db.append(temp[1])
+                mfcc.append(temp[2])
+                chroma.append(temp[3])
+                tone.append(temp[4])
+                Y_train.append(int(labelIDs[spe]))
+                englishName.append(spe)
     
     return mel, db, mfcc, chroma, tone, Y_train, englishName
 
 ld = loaddata()
-ld.createData("extraSplitDataLSTM")
+ld.createData("allSplitData")
